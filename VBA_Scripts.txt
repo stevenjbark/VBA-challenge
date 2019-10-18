@@ -1,0 +1,220 @@
+Sub StockExtractor()
+
+'Overall Strategy: The stock tables are very long, even in this testing file. Copy the cells for first and last date, prices,
+'and stock name into a new summary table in the first step. Then do calculations on this much smaller table. That way, any
+'mistakes in calculations will not have to go through 70K+ lines of iteration.
+
+'First Step: Summary Table
+
+'Setup iteration through all Worksheets
+For c = 1 To Sheets.Count
+
+    'Define the number of rows in the table and declare iterators to make certain they can be used for numerical counting
+    Dim lrows As Long
+    Dim i As Long
+
+    'I have alread discovered that Sheets(i) is the iterator for processing each sheet
+    'lrows = Sheets(i).Cells(Rows.Count, 2).End(xlUp).Row
+    'I will adapt this for a single sheet for testing purposes, then add Sheets(c) for applying across sheets
+    lrows = Sheets(c).Cells(Rows.Count, 2).End(xlUp).Row
+
+    'Strategy is to extract the first and last date of year for each stock, calculate the difference from
+    'start to end of the year, calculate the percent change. I tried to append to a summary table using an
+    'iterator, but had lots of trouble finding an appropriate iteration strategy. I looked at the strategy from
+    'last class (Credit Card Checker) and employed that same strategy. It solved the summary table problem,
+    'but there were some iteration formatting problems that I hacked through below.
+    
+    'Set a Summary_Row_Table
+    Dim Summary_Table_Row As Long
+    Summary_Table_Row = 2
+
+    'Iterate from row 1 to last row to extract the first instance and last instance of each stock
+    For i = 1 To lrows
+        
+        
+            'Execute an iteration to determine if Cell(i, 1) is not the same as Cell(i + 1, 1). If they are not
+            'the same, then write the stock name, the date, and the close price for the i row.
+            If (Sheets(c).Cells(i + 1, 1).Value <> Sheets(c).Cells(i, 1).Value) Then
+    
+                
+                'Copy Cells(i, (1,2,3,6)) into Ranges for Summary_Table_Row
+                Sheets(c).Range("I" & Summary_Table_Row).Value = Sheets(c).Cells(i, 1).Value
+                Sheets(c).Range("J" & Summary_Table_Row).Value = Sheets(c).Cells(i, 2).Value
+                Sheets(c).Range("K" & Summary_Table_Row).Value = Sheets(c).Cells(i, 6).Value
+                
+                'Insert Headers for date and open for Colums L and M, where row i + 1 data will be inserted
+                Sheets(c).Range("L2").Value = "<date>"
+                Sheets(c).Range("M2").Value = "<open>"
+                
+                'When I initally copied cells all in Summary_Table_Row defined above, the values in the
+                'cells below were always one row too high. I think this had something to do with the cells
+                'being from the i + 1 row. The values for a stock iserted in the Summary_Table_Row from the
+                'Copy Cells above were one lower than the values for that same stock copied from the cells
+                'below. I don't know why, but found that I could adapt the code by simply adding 1 to the
+                'Summary_Table_Row information.
+                'Copy cells (i + 1, (2,3,6)) into ranges for Sumamry_Table_Row
+                Sheets(c).Range("L" & Summary_Table_Row + 1).Value = Sheets(c).Cells(i + 1, 2).Value
+                Sheets(c).Range("M" & Summary_Table_Row + 1).Value = Sheets(c).Cells(i + 1, 3).Value
+                
+                Summary_Table_Row = Summary_Table_Row + 1
+                                
+            End If
+
+    'Iterates through next i until all rows are evaluated.
+    Next i
+    
+Next c
+
+End Sub
+
+
+
+
+Sub Calculations()
+
+'Second Step: Calculations from Summary Table
+
+'Setup iteration through all worksheets
+For c = 1 To Sheets.Count
+
+
+'STEP 1: Calculate the difference between end price and start price and percent change
+
+    'Define the number of rows in the Summary Table and declare iterators to make certain they can be used for numerical counting
+    Dim lrows2 As Long
+    Dim k As Long
+    Dim openprice As Double
+    Dim closeprice As Double
+    Dim difference As Double
+    Dim percentage As Double
+        
+    
+    'lrows2 = Sheets(i).Cells(Rows.Count, 13).End(xlUp).Row, use 13 to indicate 13th Column to use for calculating
+	'number of rows. This column has the open prices, so if any open prices are not present because of formatting
+	'problems in the first step, they will generate an error for evaluation. Note that in the code below, a missing
+	'open price will give an division by zero error.
+    lrows2 = Sheets(c).Cells(Rows.Count, 13).End(xlUp).Row
+        
+    'Insert Column Headers
+    Sheets(c).Range("N2").Value = "<gain(loss)>"
+    Sheets(c).Range("O2").Value = "<percent gain(loss)>"
+        
+    'Define the variables
+    'Iterate from k = 1 To lrows2, and in each row, calculate <close> - <open>, or Range("Kk").Value - Range("Mk") and percent change
+    For k = 3 To lrows2
+        
+        closeprice = Sheets(c).Cells(k, 11).Value
+        openprice = Sheets(c).Cells(k, 13).Value
+        difference = closeprice - openprice
+        percentage = ((closeprice - openprice) / openprice) * 100
+            
+        Sheets(c).Cells(k, 14).Value = difference
+        Sheets(c).Cells(k, 15).Value = percentage
+            
+    Next k
+    
+'STEP 2: Calculation for Total Volume
+
+    'Define lrows and totalvolume variables. Set totalvolume variable to 0
+    Dim lrows3 As Long
+    Dim totalvolume As Long
+    Dim i As Long
+    totalvolume = 0
+    
+    'Define the number of rows required for iteration
+    lrows3 = Sheets(c).Cells(Rows.Count, 2).End(xlUp).Row
+
+    'Setup Summary_Table_Rows for inputting totalvolume data. Set the Summary Table starting row at 3.
+    Dim Summary_Table_Rows As Long
+    Summary_Table_Rows = 3
+ 
+    'Iterate through each line as above and define when the stock from Cell(i, 1) is not equal to the stock from Cell (i+1, 1)
+    '****IMPORTANT**** Initially, I set i to loop from 1 to lrows3, but Cells(i, 7).Value is a header <vol>. This cannot be used
+    'for mathematical calculations and generated a "Error 13, Type Mismatch" error. Starting i at 3 resolved this problem.
+    '****IPORTANT**** After resolving the Mismatch Error 13, I ran into an "Overflow" Error. This was traced to the totalvolume
+    'addition steps. I think the numbers were too large for even Long data types. I even tried adding CLng() for the Cells(i, 7)
+    'addition to force all of the volume data to be in Long data type. It didn't work. I then divided all Cells(i, 7) values
+    'by 1000 prior to addition steps. This resolved the overflow errors.
+    
+    'Still one nagging problem. Some of the data total volumes are as calculated in this script are slightly off from the manual
+    'addition of these same data.
+    For i = 3 To lrows3
+
+        'Check if stock at Cells(i, 1) and Cells(i + 1, 1) are not the same
+        If (Sheets(c).Cells(i, 1).Value <> Sheets(c).Cells(i + 1, 1).Value) Then
+        
+            'If TRUE and Sheets(c).Cells(i+1, 1) is not equal to Sheets(c).Cells(i, 1),
+            'then create header <total volume> in Column P
+            Sheets(c).Cells(2, 16).Value = "<totalvolume>x1000"
+            
+            'then take the totalvolume added from all Sheets(c).Cells(i, 7) and add the final volume for this last line Sheets(c).Cells(i, 7).
+            totalvolume = totalvolume + CLng(Sheets(c).Cells(i, 7).Value) / 1000
+    
+            'then output the totalvolume data into Sheet(c) Column P for totalvolume data
+            Sheets(c).Range("P" & Summary_Table_Rows).Value = totalvolume
+        
+            'Add new line to the Summary_Table_Rows
+            Summary_Table_Rows = Summary_Table_Rows + 1
+        
+            'then reset the totalvolume counter
+            totalvolume = 0
+            
+        Else
+            'If FALSE and Cells(i + 1, 1) is EQUAL to Cells(i, 1), then the above If statement will not execute. The stock names
+            'are the same. This Else statement will total up all of the volumes in Cells(i, 7) for the same stock except for the
+            'last Cells(i, 7). That is handled when the above If statement is TRUE.
+            totalvolume = totalvolume + CLng(Sheets(c).Cells(i, 7).Value) / 1000
+        
+        End If
+        
+    Next i
+    
+'STEP 3: Calculation for Maximum and Minimum Percent Changes and Maximum Volume
+
+     'Define last row in the Summary Table in Column O, where the %Gain or Loss is located
+    lrows4 = Sheets(c).Cells(Rows.Count, 15).End(xlUp).Row
+
+    'Found the Applications.WorksheetFunctions.Max that extracts the maximum value found in a range.
+    Sheets(c).Cells(3, 18).Value = Application.WorksheetFunction.Max _
+    (Sheets(c).Range("O2:O" & lrows4))
+        
+    'Apply this same logic to find the minimum value in this same column and paste into Cell(4, 17).
+    Sheets(c).Cells(4, 18).Value = Application.WorksheetFunction.Min _
+        (Sheets(c).Range("O2:O" & lrows4))
+
+    'Apply this same logic to find the maximum volume
+    Sheets(c).Cells(5, 18).Value = Application.WorksheetFunction.Max _
+        (Sheets(c).Range("P2:P" & lrows4))
+        
+    'For loops to extract <ticker> in the Summary Table for max and min percent change, and max volume
+    For p = 2 To lrows4
+
+        If Sheets(c).Cells(3, 18).Value = Sheets(c).Cells(p, 15).Value Then
+            Sheets(c).Cells(3, 17).Value = Sheets(c).Cells(p, 9).Value & " (Max)"
+    
+        End If
+    
+        If Sheets(c).Cells(4, 18).Value = Sheets(c).Cells(p, 15).Value Then
+            Sheets(c).Cells(4, 17).Value = Sheets(c).Cells(p, 9).Value & " (Min)"
+    
+        End If
+        If Sheets(c).Cells(5, 18).Value = Sheets(c).Cells(p, 16).Value Then
+            Sheets(c).Cells(5, 17).Value = Sheets(c).Cells(p, 9).Value & " (Max Vol)"
+        
+        End If
+    
+    
+    Next p
+
+
+'Iterates through the next Worksheet
+Next c
+
+End Sub
+
+
+
+
+
+
+
